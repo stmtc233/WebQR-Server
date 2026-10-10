@@ -11,6 +11,34 @@
 https://github.com/stmtc233/WebQR-Client
 
 
+## 纯前端版本（无需服务器，无需 App）
+
+`docs/` 目录是一个**完全在浏览器里运行**的版本：手机浏览器直接调用摄像头扫码，扫到的内容通过 **WebRTC 点对点**发送到另一台设备的网页上，并在网页上重新生成二维码。不需要部署 Node.js / Cloudflare Workers，也不需要安装 Android 客户端。
+
+### 使用方法
+
+1. 在电脑（或任意设备）上打开页面，点击 **「作为显示端打开」**，页面会显示一个 6 位房间号和配对二维码。
+2. 用手机相机扫描配对二维码（或打开同一页面输入房间号），允许摄像头权限后对准要转发的二维码。
+3. 扫到新内容后会立即同步到显示端，显示端重新生成二维码，并保留最近 5 条记录。
+
+功能：原生 `BarcodeDetector` 识别（不支持的浏览器自动退回 jsQR）、变焦滑条、闪光灯、防重复发送、断线自动重连、多台扫码端同时连接、显示端记住房间号（扫码端链接可收藏）。
+
+### 发布到公网（GitHub Pages）
+
+整个 `docs/` 都是静态文件（依赖库已放在 `docs/vendor/`，不依赖外部 CDN），可以托管在任何静态网站服务上。用 GitHub Pages：
+
+仓库 **Settings → Pages → Build and deployment → Source 选 “Deploy from a branch”**，分支选 `main`（或包含 `docs/` 的分支），目录选 `/docs`，保存。几分钟后即可通过 `https://stmtc233.github.io/WebQR-Server/` 访问。
+
+> 摄像头只能在 HTTPS 下使用，GitHub Pages / Cloudflare Pages 等都自带 HTTPS。
+
+### 原理与限制
+
+- 设备之间建立连接需要一个**信令服务器**交换连接信息，默认使用 PeerJS 官方的免费公共服务器 `0.peerjs.com`；连接建立后二维码数据直接点对点传输，不经过任何服务器。
+- 只配置了 STUN，没有 TURN 中继：两台设备都在对称型 NAT 后面（部分移动网络、公司网络）时可能连不上，这时让两台设备连同一个 Wi-Fi 一般就能解决。
+- 如果公共信令服务器在你的网络环境下访问不稳定，可以自建 [peerjs-server](https://github.com/peers/peerjs-server)，然后在 `docs/config.js` 里填写地址。
+- 显示端关闭后不保留历史；需要持久化请使用上面的 Cloudflare Workers 方案。
+
+
 ## 目录
 
 - [部署方式一：Node.js](#部署方式一nodejs)
