@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#111418">
+<title>WebQR</title>
+<style>
+  :root {
+    --bg: #f3f4f6;
+    --panel: #ffffff;
+    --text: #15181d;
+    --muted: #616a76;
+    --border: #dde1e6;
+    --accent: #2563eb;
+    --accent-text: #ffffff;
+    --ok: #15803d;
+    --warn: #b45309;
+    --err: #b91c1c;
+    --shadow: 0 4px 16px rgba(0, 0, 0, .08);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1216;
+      --panel: #181c22;
+      --text: #e8eaed;
+      --muted: #9aa3ae;
+      --border: #2b313a;
+      --accent: #4f8cff;
+      --accent-text: #ffffff;
+      --ok: #4ade80;
+      --warn: #fbbf24;
+      --err: #f87171;
+      --shadow: 0 4px 16px rgba(0, 0, 0, .4);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.5 system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  button, input {
+    font: inherit;
+    color: inherit;
+  }
+  button {
+    border: 1px solid var(--border);
+    background: var(--panel);
+    border-radius: 8px;
+    padding: 8px 14px;
+    cursor: pointer;
+  }
+  button.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-text);
+  }
+  button:disabled { opacity: .5; cursor: default; }
+  .hidden { display: none !important; }
+  .muted { color: var(--muted); }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); margin-right: 6px; vertical-align: middle; }
+  .dot.ok { background: var(--ok); }
+  .dot.warn { background: var(--warn); }
+  .dot.err { background: var(--err); }
+
+  /* ---------- 首页 ---------- */
+  #home {
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 16px;
+    gap: 20px;
+    text-align: center;
+  }
+  #home h1 { margin: 0; font-size: 28px; }
+  #home p { margin: 0; max-width: 520px; }
+  .cards { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; width: 100%; max-width: 640px; }
+  .card {
+    flex: 1 1 240px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    text-align: left;
+  }
+  .card h2 { margin: 0; font-size: 18px; }
+  .row { display: flex; gap: 8px; }
+  .row input {
+    flex: 1;
+    min-width: 0;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    border-radius: 8px;
+    padding: 8px 10px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+  }
+
+  /* ---------- 显示端 ---------- */
+  #display {
+    min-height: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    padding: 20px 16px;
+    align-items: flex-start;
+    justify-content: center;
+  }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: var(--shadow);
+  }
+  #qrPanel {
+    flex: 1 1 420px;
+    max-width: 640px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+  #qrBox {
+    width: min(100%, 72vh, 560px);
+    aspect-ratio: 1;
+    background: #fff;
+    border-radius: 8px;
+    padding: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #616a76;
+    text-align: center;
+  }
+  #qrBox svg { width: 100%; height: 100%; display: block; }
+  #qrText {
+    width: 100%;
+    word-break: break-all;
+    font-size: 13px;
+    max-height: 4.5em;
+    overflow: auto;
+  }
+  #sidePanel {
+    flex: 0 1 320px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+    width: 100%;
+  }
+  #sidePanel h3 { margin: 0 0 8px; font-size: 15px; }
+  #pairQr { width: 180px; height: 180px; background: #fff; border-radius: 8px; padding: 8px; margin: 8px auto; }
+  #pairQr svg { width: 100%; height: 100%; display: block; }
+  .room-code { font-size: 28px; letter-spacing: 6px; text-align: center; font-weight: 600; }
+  .link { word-break: break-all; font-size: 12px; }
+  #log { list-style: none; margin: 0; padding: 0; font-size: 13px; }
+  #log li { padding: 6px 0; border-top: 1px solid var(--border); word-break: break-all; }
+  #log li:first-child { border-top: 0; }
+  #log time { color: var(--muted); margin-right: 8px; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  /* ---------- 扫码端 ---------- */
+  #scanner {
+    position: fixed;
+    inset: 0;
+    background: #000;
+    color: #fff;
+  }
+  #video {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .frame {
+    position: absolute;
+    left: 50%;
+    top: 45%;
+    width: min(70vw, 70vh);
+    aspect-ratio: 1;
+    transform: translate(-50%, -50%);
+    border: 2px solid rgba(255, 255, 255, .7);
+    border-radius: 16px;
+    box-shadow: 0 0 0 100vmax rgba(0, 0, 0, .25);
+    pointer-events: none;
+  }
+  .frame.hit { border-color: #4ade80; }
+  .topbar, .bottombar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background: linear-gradient(rgba(0, 0, 0, .65), rgba(0, 0, 0, 0));
+  }
+  .topbar { top: 0; padding-top: max(12px, env(safe-area-inset-top)); }
+  .bottombar {
+    bottom: 0;
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+    background: linear-gradient(rgba(0, 0, 0, 0), rgba(0, 0, 0, .75));
+  }
+  .topbar .row { justify-content: space-between; align-items: center; }
+  #scanner button {
+    background: rgba(255, 255, 255, .15);
+    border-color: rgba(255, 255, 255, .25);
+    color: #fff;
+  }
+  #scanStatus { word-break: break-all; font-size: 14px; max-height: 6em; overflow: auto; }
+  #zoomRow { align-items: center; }
+  #zoom { flex: 1; }
+  #scanner .muted { color: rgba(255, 255, 255, .7); }
+</style>
+</head>
+<body>
+
+<!-- 首页：选择角色 -->
+<section id="home" class="hidden">
+  <h1>WebQR</h1>
+  <p class="muted">纯前端的二维码实时转发：手机浏览器扫码，结果通过 WebRTC 点对点直接发送到另一台设备的网页上并重新生成二维码。无需自建服务器，无需安装 App。</p>
+  <div class="cards">
+    <div class="card">
+      <h2>显示端</h2>
+      <span class="muted">在电脑或另一台设备上打开，等待接收并显示二维码。</span>
+      <button class="primary" id="goDisplay">作为显示端打开</button>
+    </div>
+    <div class="card">
+      <h2>扫码端</h2>
+      <span class="muted">输入显示端上的房间号，或直接用手机扫显示端上的配对二维码。</span>
+      <div class="row">
+        <input id="roomInput" maxlength="6" placeholder="房间号" autocomplete="off">
+        <button class="primary" id="goScan">开始扫码</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 显示端 -->
+<section id="display" class="hidden">
+  <div id="qrPanel" class="panel">
+    <div id="qrBox">等待扫码端发送二维码…</div>
+    <div id="qrText" class="mono muted"></div>
+    <div class="muted" id="qrMeta">尚未收到数据</div>
+  </div>
+  <div id="sidePanel">
+    <div class="panel">
+      <h3><span class="dot" id="dispDot"></span><span id="dispStatus">正在连接信令服务器…</span></h3>
+      <div class="muted" id="peerCount">扫码端：0 台在线</div>
+    </div>
+    <div class="panel" id="pairPanel">
+      <h3>配对</h3>
+      <div class="muted">用手机相机扫描下方二维码，或在扫码端输入房间号：</div>
+      <div id="pairQr"></div>
+      <div class="room-code mono" id="roomCode">------</div>
+      <div class="link mono muted" id="scanLink"></div>
+      <div class="actions" style="margin-top:10px">
+        <button id="copyLink">复制链接</button>
+        <button id="newRoom">换一个房间号</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>最近记录</h3>
+      <ul id="log"><li class="muted">暂无</li></ul>
+    </div>
+    <div class="actions">
+      <button id="togglePair">隐藏配对</button>
+      <button id="fullscreen">全屏</button>
+    </div>
+  </div>
+</section>
+
+<!-- 扫码端 -->
+<section id="scanner" class="hidden">
+  <video id="video" playsinline muted autoplay></video>
+  <div class="frame" id="frame"></div>
+  <div class="topbar">
+    <div class="row">
+      <span><span class="dot" id="scanDot"></span><span id="connStatus">正在连接…</span></span>
+      <span class="mono muted" id="scanRoom"></span>
+    </div>
+  </div>
+  <div class="bottombar">
+    <div id="scanStatus">正在启动相机…</div>
+    <div class="row hidden" id="zoomRow">
+      <span class="muted">变焦</span>
+      <input type="range" id="zoom" min="1" max="1" step="0.1" value="1">
+      <span class="mono" id="zoomVal">1.0x</span>
+    </div>
+    <div class="row">
+      <button id="resend" disabled>重新发送</button>
+      <button id="torch" class="hidden">闪光灯</button>
+      <button id="leave">退出</button>
+    </div>
+  </div>
+</section>
+
+<script src="vendor/peerjs.min.js"></script>
+<script src="vendor/jsQR.js"></script>
+<script src="vendor/qrcode.js"></script>
+<script src="config.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  // 所有房间都以此前缀注册到 PeerJS 公共信令服务器，避免与其他应用冲突
+  var PEER_PREFIX = 'webqr-stmtc233-';
+  var ROOM_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  var ROOM_KEY = 'webqr-room';
+  var LOG_SIZE = 5;
+
+  var PEER_OPTIONS = {
+    debug: 1,
+    config: {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun.cloudflare.com:3478' },
+        { urls: 'stun:stun.miwifi.com:3478' }
+      ]
+    }
+  };
+
+  // 可选：在 config.js 中设置 window.WEBQR_PEER_SERVER 指向自建 PeerJS 信令服务器
+  if (window.WEBQR_PEER_SERVER) {
+    for (var k in window.WEBQR_PEER_SERVER) PEER_OPTIONS[k] = window.WEBQR_PEER_SERVER[k];
+  }
+
+  qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8'];
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  function show(id) {
+    ['home', 'display', 'scanner'].forEach(function (s) {
+      $(s).classList.toggle('hidden', s !== id);
+    });
+  }
+
+  function randomRoom() {
+    var out = '';
+    var buf = new Uint32Array(6);
+    crypto.getRandomValues(buf);
+    for (var i = 0; i < 6; i++) out += ROOM_CHARS[buf[i] % ROOM_CHARS.length];
+    return out;
+  }
+
+  function normalizeRoom(s) {
+    return (s || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+  }
+
+  function storageGet(k) {
+    try { return localStorage.getItem(k); } catch (e) { return null; }
+  }
+
+  function storageSet(k, v) {
+    try { localStorage.setItem(k, v); } catch (e) { /* 忽略 */ }
+  }
+
+  function qrSvg(text, ecl) {
+    var qr = qrcode(0, ecl || 'M');
+    qr.addData(text, 'Byte');
+    qr.make();
+    return qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
+  }
+
+  function timeStr(ts) {
+    var d = new Date(ts);
+    return d.toLocaleTimeString('zh-CN', { hour12: false });
+  }
+
+  function setDot(el, state) {
+    el.className = 'dot' + (state ? ' ' + state : '');
+  }
+
+  function baseUrl() {
+    return location.origin + location.pathname;
+  }
+
+  /* ===================== 显示端 ===================== */
+  function startDisplay() {
+    show('display');
+    var room = normalizeRoom(storageGet(ROOM_KEY));
+    if (room.length !== 6) {
+      room = randomRoom();
+      storageSet(ROOM_KEY, room);
+    }
+
+    var peer = null;
+    var conns = [];
+    var current = null;
+    var retryTimer = null;
+
+    function retry(fn, ms) {
+      clearTimeout(retryTimer);
+      retryTimer = setTimeout(fn, ms);
+    }
+    var log = [];
+
+    function renderPairing() {
+      var link = baseUrl() + '?scan=' + room;
+      $('roomCode').textContent = room;
+      $('scanLink').textContent = link;
+      $('pairQr').innerHTML = qrSvg(link, 'L');
+    }
+
+    function renderPeers() {
+      var n = conns.filter(function (c) { return c.open; }).length;
+      $('peerCount').textContent = '扫码端：' + n + ' 台在线';
+    }
+
+    function renderQr() {
+      if (!current) return;
+      try {
+        $('qrBox').innerHTML = qrSvg(current.data, 'M');
+      } catch (e) {
+        $('qrBox').textContent = '内容过长，无法生成二维码';
+      }
+      $('qrText').textContent = current.data;
+      $('qrMeta').textContent = '更新于 ' + timeStr(current.ts);
+    }
+
+    function renderLog() {
+      var ul = $('log');
+      ul.innerHTML = '';
+      if (!log.length) {
+        ul.innerHTML = '<li class="muted">暂无</li>';
+        return;
+      }
+      log.forEach(function (item) {
+        var li = document.createElement('li');
+        var t = document.createElement('time');
+        t.textContent = timeStr(item.ts);
+        li.appendChild(t);
+        li.appendChild(document.createTextNode(item.data));
+        ul.appendChild(li);
+      });
+    }
+
+    function receive(data) {
+      if (!current || current.data !== data) {
+        current = { data: data, ts: Date.now() };
+        log.unshift(current);
+        if (log.length > LOG_SIZE) log.length = LOG_SIZE;
+        renderQr();
+        renderLog();
+      }
+    }
+
+    function setStatus(text, state) {
+      $('dispStatus').textContent = text;
+      setDot($('dispDot'), state);
+    }
+
+    function handleConn(conn) {
+      conns.push(conn);
+      conn.on('open', function () {
+        renderPeers();
+        if (current) conn.send({ type: 'current', data: current.data });
+      });
+      conn.on('data', function (msg) {
+        if (!msg || msg.type !== 'qr' || typeof msg.data !== 'string' || !msg.data) return;
+        receive(msg.data);
+        conn.send({ type: 'ack', id: msg.id });
+      });
+      var drop = function () {
+        conns = conns.filter(function (c) { return c !== conn; });
+        renderPeers();
+      };
+      conn.on('close', drop);
+      conn.on('error', drop);
+    }
+
+    function connect() {
+      clearTimeout(retryTimer);
+      if (peer) peer.destroy();
+      conns = [];
+      renderPeers();
+      renderPairing();
+      setStatus('正在连接信令服务器…', 'warn');
+      peer = new Peer(PEER_PREFIX + room, PEER_OPTIONS);
+      peer.on('open', function () {
+        setStatus('已就绪，房间 ' + room, 'ok');
+      });
+      peer.on('connection', handleConn);
+      peer.on('disconnected', function () {
+        setStatus('与信令服务器断开，正在重连…', 'warn');
+        retry(function () {
+          if (peer && !peer.destroyed && peer.disconnected) peer.reconnect();
+        }, 2000);
+      });
+      peer.on('error', function (err) {
+        if (err.type === 'unavailable-id') {
+          setStatus('房间号 ' + room + ' 已被占用（可能在其他标签页打开了），请换一个房间号', 'err');
+        } else if (err.type === 'network' || err.type === 'server-error' || err.type === 'socket-error') {
+          setStatus('无法连接信令服务器，3 秒后重试…', 'err');
+          retry(connect, 3000);
+        } else if (err.type !== 'peer-unavailable') {
+          setStatus('出错：' + err.type, 'err');
+        }
+      });
+    }
+
+    $('newRoom').onclick = function () {
+      room = randomRoom();
+      storageSet(ROOM_KEY, room);
+      connect();
+    };
+    $('copyLink').onclick = function () {
+      var link = $('scanLink').textContent;
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(link).then(function () {
+          $('copyLink').textContent = '已复制';
+          setTimeout(function () { $('copyLink').textContent = '复制链接'; }, 1500);
+        });
+      }
+    };
+    $('togglePair').onclick = function () {
+      var hidden = $('pairPanel').classList.toggle('hidden');
+      $('togglePair').textContent = hidden ? '显示配对' : '隐藏配对';
+    };
+    $('fullscreen').onclick = function () {
+      if (document.fullscreenElement) document.exitFullscreen();
+      else if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen();
+    };
+    window.addEventListener('beforeunload', function () { if (peer) peer.destroy(); });
+
+    connect();
+  }
+
+  /* ===================== 扫码端 ===================== */
+  function startScanner(room) {
+    show('scanner');
+    $('scanRoom').textContent = '房间 ' + room;
+
+    var peer = null;
+    var conn = null;
+    var lastSent = null;
+    var pending = null;
+    var msgId = 0;
+    var retryTimer = null;
+    var stream = null;
+    var track = null;
+    var detector = null;
+    var scanning = true;
+
+    var video = $('video');
+    var canvas = document.createElement('canvas');
+    var ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+    function setConn(text, state) {
+      $('connStatus').textContent = text;
+      setDot($('scanDot'), state);
+    }
+
+    function setStatus(text) {
+      $('scanStatus').textContent = text;
+    }
+
+    function send(data) {
+      if (conn && conn.open) {
+        msgId++;
+        conn.send({ type: 'qr', data: data, id: msgId });
+        setStatus('已发送，等待确认：' + data);
+        pending = null;
+      } else {
+        pending = data;
+        setStatus('尚未连上显示端，连上后自动发送：' + data);
+      }
+    }
+
+    function scheduleRetry() {
+      clearTimeout(retryTimer);
+      retryTimer = setTimeout(connectDisplay, 2000);
+    }
+
+    function connectDisplay() {
+      if (!peer || peer.destroyed) return;
+      if (peer.disconnected) { peer.reconnect(); return; }
+      if (conn && conn.open) return;
+      setConn('正在连接显示端…', 'warn');
+      conn = peer.connect(PEER_PREFIX + room, { reliable: true });
+      conn.on('open', function () {
+        setConn('已连接显示端', 'ok');
+        if (pending) send(pending);
+      });
+      conn.on('data', function (msg) {
+        if (!msg) return;
+        if (msg.type === 'ack' && msg.id === msgId) {
+          setStatus('✓ 已同步到显示端：' + lastSent);
+        }
+      });
+      conn.on('close', function () {
+        setConn('与显示端断开，正在重连…', 'err');
+        scheduleRetry();
+      });
+      conn.on('error', function () { scheduleRetry(); });
+    }
+
+    function startPeer() {
+      setConn('正在连接信令服务器…', 'warn');
+      peer = new Peer(PEER_OPTIONS);
+      peer.on('open', connectDisplay);
+      peer.on('disconnected', function () {
+        setConn('与信令服务器断开，正在重连…', 'warn');
+        scheduleRetry();
+      });
+      peer.on('error', function (err) {
+        if (err.type === 'peer-unavailable') {
+          setConn('找不到房间 ' + room + '，请确认显示端已打开', 'err');
+        } else {
+          setConn('连接出错：' + err.type, 'err');
+        }
+        scheduleRetry();
+      });
+    }
+
+    function onDecoded(text) {
+      if (!text) return;
+      $('frame').classList.add('hit');
+      setTimeout(function () { $('frame').classList.remove('hit'); }, 250);
+      // 防重复：同一内容只发送一次
+      if (text === lastSent) return;
+      lastSent = text;
+      $('resend').disabled = false;
+      if (navigator.vibrate) navigator.vibrate(60);
+      send(text);
+    }
+
+    function decodeWithJsQR() {
+      var vw = video.videoWidth, vh = video.videoHeight;
+      if (!vw || !vh) return null;
+      var scale = Math.min(1, 960 / Math.max(vw, vh));
+      var w = Math.round(vw * scale), h = Math.round(vh * scale);
+      canvas.width = w;
+      canvas.height = h;
+      ctx.drawImage(video, 0, 0, w, h);
+      var img = ctx.getImageData(0, 0, w, h);
+      var res = jsQR(img.data, w, h, { inversionAttempts: 'attemptBoth' });
+      return res ? res.data : null;
+    }
+
+    function tick() {
+      if (!scanning) return;
+      var next = function () { setTimeout(tick, 80); };
+      if (video.readyState < 2) return next();
+      if (detector) {
+        detector.detect(video).then(function (codes) {
+          if (codes && codes.length) onDecoded(codes[0].rawValue);
+        }).catch(function () {
+          detector = null; // 原生识别失败则退回 jsQR
+        }).then(next);
+      } else {
+        try { onDecoded(decodeWithJsQR()); } catch (e) { /* 忽略单帧错误 */ }
+        next();
+      }
+    }
+
+    function setupZoom() {
+      var caps = track.getCapabilities ? track.getCapabilities() : {};
+      if (caps.zoom && caps.zoom.max > caps.zoom.min) {
+        var z = $('zoom');
+        z.min = caps.zoom.min;
+        z.max = caps.zoom.max;
+        z.step = caps.zoom.step || 0.1;
+        var settings = track.getSettings ? track.getSettings() : {};
+        z.value = settings.zoom || caps.zoom.min;
+        $('zoomVal').textContent = Number(z.value).toFixed(1) + 'x';
+        $('zoomRow').classList.remove('hidden');
+        z.oninput = function () {
+          $('zoomVal').textContent = Number(z.value).toFixed(1) + 'x';
+          track.applyConstraints({ advanced: [{ zoom: Number(z.value) }] }).catch(function () {});
+        };
+      }
+      if (caps.torch) {
+        var on = false;
+        $('torch').classList.remove('hidden');
+        $('torch').onclick = function () {
+          on = !on;
+          track.applyConstraints({ advanced: [{ torch: on }] }).catch(function () {});
+          $('torch').textContent = on ? '关闭闪光灯' : '闪光灯';
+        };
+      }
+    }
+
+    function startCamera() {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setStatus('当前浏览器不支持相机（需要 HTTPS 访问）');
+        return;
+      }
+      navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: {
+          facingMode: { ideal: 'environment' },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 }
+        }
+      }).then(function (s) {
+        stream = s;
+        track = s.getVideoTracks()[0];
+        video.srcObject = s;
+        return video.play();
+      }).then(function () {
+        setupZoom();
+        setStatus('正在扫描…将二维码放入框内');
+        tick();
+      }).catch(function (e) {
+        setStatus('无法打开相机：' + (e && e.name === 'NotAllowedError' ? '权限被拒绝' : (e && e.message || e)));
+      });
+    }
+
+    function initDetector() {
+      if (!('BarcodeDetector' in window)) return Promise.resolve();
+      return BarcodeDetector.getSupportedFormats().then(function (formats) {
+        if (formats.indexOf('qr_code') >= 0) detector = new BarcodeDetector({ formats: ['qr_code'] });
+      }).catch(function () {});
+    }
+
+    $('resend').onclick = function () { if (lastSent) send(lastSent); };
+    $('leave').onclick = function () {
+      scanning = false;
+      if (stream) stream.getTracks().forEach(function (t) { t.stop(); });
+      if (peer) peer.destroy();
+      location.href = baseUrl();
+    };
+    document.addEventListener('visibilitychange', function () {
+      // 回到前台时确保连接仍然存活
+      if (!document.hidden && peer && !(conn && conn.open)) connectDisplay();
+    });
+
+    startPeer();
+    initDetector().then(startCamera);
+  }
+
+  /* ===================== 入口 ===================== */
+  function startHome() {
+    show('home');
+    $('goDisplay').onclick = function () { location.href = baseUrl() + '?display'; };
+    var go = function () {
+      var room = normalizeRoom($('roomInput').value);
+      if (room.length !== 6) { $('roomInput').focus(); return; }
+      location.href = baseUrl() + '?scan=' + room;
+    };
+    $('goScan').onclick = go;
+    $('roomInput').addEventListener('keydown', function (e) { if (e.key === 'Enter') go(); });
+  }
+
+  var params = new URLSearchParams(location.search);
+  if (params.has('scan')) {
+    var r = normalizeRoom(params.get('scan'));
+    if (r.length === 6) startScanner(r); else startHome();
+  } else if (params.has('display')) {
+    startDisplay();
+  } else {
+    startHome();
+  }
+})();
+</script>
+</body>
+</html>
